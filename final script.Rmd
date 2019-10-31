@@ -1,0 +1,465 @@
+---
+title: "부동산 실거래가 예측"
+author: "fiona,youkyung"
+date: '2019 10 31 '
+output:
+  slidy_presentation: default
+  ioslides_presentation: default
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=F, fig.align = "center", message=F, warning=F, fig.height = 8, cache=T, dpi = 300)
+```
+
+
+
+## 1. 구하고자 하는 것 vs 구할 수 있는 것
+
+- **구하고자 하는 것** 
+
+  - 앞으로 어느 지역의 아파트 가격이 오를까? 
+- 구할 수 있는 것 
+  
+  -물리적 변수 : 평형, 건물연수  
+  -외적 변수 : 수요&공급 물량, 전입 전출인구   
+  -입지 변수 : 지하철까지의 거리, 공원까지의 거리   
+  -심리적 변수 : 네이버 키워드 언급량  
+  
+### 1.1 데이터 수집 
+#### 1.1.1 국토부 아파트 실거래가 상세 데이터   
+깨달은점  : 데이터를 불러오는 것 자체 시간 소요 많이됨   
+            자동적으로 불러와도, error가 많이 나기 때문에 꼭 데이터를 점검 해야 함 
+```{r eval=FALSE, include=FALSE}
+# 데이터 출처 : 국토부 아파트 실거래가 상세 데이터 
+# 데이터 기간 : 2014.09~2019.09 (총 5개년 데이터) 
+# 데이터 항목 : "시군구코드","시군구","날짜","거래금액","건축년도","년","도로명","도로명건물본번호코드","도로명건물부번호코드",
+#               "도로명시군구코드","도로명일련번호코드","도로명지상지하코드","도로명코드","법정동",
+#               "법정동본번코드","법정동부번코드","법정동시군구코드","법정도읍면동코드","법정동지번코드",
+#               "아파트","월","일","일련번호","전용면적","지번","지역코드","층"
+library(XML)
+library(data.table)
+library(stringr)
+library(ggplot2)
+
+service_key <-"RR4OiP5FElPvLBxp7%2FgTitOIlfK09e7y7xRz5k%2B%2BabGSGFAZHNtgOqmTJ7AXr65wSivFDeQVVIK9sfupQS2zVA%3D%3D"
+
+locCode <-c("11110","11140","11170","11200","11215","11230","11260","11290","11305","11320","11350",
+            "11380","11410","11440","11470","11500","11530","11545","11560","11590","11620","11650","11680","11710","11740")
+
+locCode_nm <-c("종로구","중구","용산구","성동구","광진구","동대문구","중랑구","성북구","강북구","도봉구",
+               "노원구","은평구","서대문구","마포구","양천구","강서구","구로구","금천구","영등포구","동작구","관악구","서초구",
+               "강남구","송파구","강동구")
+
+datalist <-c("201510","201511","201512","201601","201602","201603","201604","201605","201606","201607","201608","201609")
+
+loc <-cbind(locCode,locCode_nm)
+loc
+Num_of_Rows <- 100
+urllist <- list()
+cnt <-0
+
+#for문 사용하여 데이터를 요청할 url 리스트를 생성 
+for(i in 1:length(locCode)){
+  for(j in 1:length(datalist)){
+    cnt=cnt+1
+    urllist[cnt] <-paste0("http://openapi.molit.go.kr/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptTradeDev?LAWD_CD=",locCode[i],
+                          "&DEAL_YMD=",datalist[j],
+                          "&numOfRows=",Num_of_Rows,
+                          "&serviceKey=",service_key)
+  }
+}
+
+raw.data <- list()
+rootNode <- list()
+
+#생성한 URL대로 XML 요청 
+
+for(i in 1:length(urllist)){
+  raw.data[[i]] <- xmlTreeParse(urllist[i], useInternalNodes = TRUE,encoding = "utf-8")
+  rootNode[[i]] <- xmlRoot(raw.data[[i]])
+}
+
+# 저장한 XML을 분석가능한 형태로 수정
+
+total<-list()
+
+for(i in 1:length(urllist)){
+  
+  item <- list()
+  item_temp_dt<-data.table()
+  
+  items <- rootNode[[i]][[2]][['items']] # items 항목만 골라낸다
+  
+  size <- xmlSize(items) # 몇개의 item 이 있는지 확인한다
+  
+  for(j in 1:size){
+    item_temp <- xmlSApply(items[[j]],xmlValue)
+    item_temp_dt <- data.table( GU      = locCode_nm[i%/%12+1],
+                                GU_CODE = locCode[i%/%12+1],
+                                DATE = datalist[(i-1)%%12+1],
+                                VAR1=item_temp[1],
+                                VAR2=item_temp[2],
+                                VAR3=item_temp[3],
+                                VAR4=item_temp[4],
+                                VAR5=item_temp[5],
+                                VAR6=item_temp[6],
+                                VAR7=item_temp[7],
+                                VAR8=item_temp[8],
+                                VAR9=item_temp[9],
+                                VAR10=item_temp[10],
+                                VAR11=item_temp[11],
+                                VAR12=item_temp[12],
+                                VAR13=item_temp[13],
+                                VAR14=item_temp[14],
+                                VAR15=item_temp[15],
+                                VAR16=item_temp[16],
+                                VAR17=item_temp[17],
+                                VAR18=item_temp[18],
+                                VAR19=item_temp[19],
+                                VAR20=item_temp[20],
+                                VAR21=item_temp[21],
+                                VAR22=item_temp[22],
+                                VAR23=item_temp[23],
+                                VAR24=item_temp[24])
+    
+    item[[j]]<-item_temp_dt
+  }
+  total[[i]] <- rbindlist(item)
+}
+
+APT_SALES_ROSS <- rbindlist(total)
+
+
+names(APT_SALES_ROSS) <- c("시군구코드","시군구","날짜","거래금액","건축년도","년","도로명","도로명건물본번호코드","도로명건물부번호코드",
+                              "도로명시군구코드","도로명일련번호코드","도로명지상지하코드","도로명코드","법정동",
+                              "법정동본번코드","법정동부번코드","법정동시군구코드","법정도읍면동코드","법정동지번코드",
+                              "아파트","월","일","일련번호","전용면적","지번","지역코드","층")
+## 최종적으로 연도별로 끊어서 데이터를 받았기 때문에 rbind 함수 사용하여 전체 데이터 취합 > RESULT_FINAL.RData 저장 
+```
+
+#### 1.1.2 구별 인구이동 데이터    
+깨달은점  : 데이터 구조 reshape 기능이 있다는 것을 엑셀로 수작업을 한 뒤에 깨달음   
+            행을 열로 변환하거나 하는 간단한 기능 보다는 공공 데이터 셋은 보통 보기 좋은 엑셀 시트에  
+            담기기 때문에 그것을 다시 데이터셋의 형태로 전환해줘야 함. 
+            [Merge/dcast기능 알아보기](https://rfriend.tistory.com/80)  
+            또 여기에서 깊은 깨달음이 있음. 자동으로 파일 read시, cha로 변환되는데 num변환시 
+            자꾸 0 또는 NA로 변환이 되어 데이터가 아무 소용없는 데이터로 변해버리는 것임. 
+            숫자 표기 100,000이 문자로 변환되며 ,이 특수문자로 인식되어서 오류가 나는 것. 
+```{r pop, include=FALSE, paged.print=FALSE}
+# 데이터 출처 : 국토부 구별 월별 인구이동 데이터  
+# 데이터 기간 : 2014.09~2019.08 (총 5개년 데이터 중 1개가 부족함) 
+# 데이터 항목 : 인구이동연, 인구이동월, 날짜, 시군구코드, 구별이동, 구인구, 이동 비율 
+
+#데이터 구조 또는 이상한 데이터가 없는지 확인 
+pop<-read.csv("pro/pop2.csv",fileEncoding = "UTF-8", sep =",",stringsAsFactors = FALSE)
+head(pop)
+table(pop$인구이동월)
+
+# 변수별 타입 변경 
+pop$날짜<-factor(pop$날짜)
+pop$구별이동 <-gsub(",","",pop$구별이동)
+pop$구인구 <-gsub(",","",pop$구인구)
+pop$비율 <-gsub("%","",pop$비율)
+pop$인구이동구<-factor(pop$인구이동구)
+pop$구별이동<-as.numeric(pop$구별이동)
+pop$구인구<-as.numeric(pop$구인구)
+pop$비율<-as.numeric(pop$비율)
+
+#결측치 처리하고 꼭! 반드시 ! 저장할 것 
+colSums(is.na(pop))
+pop[1069,5]<-0
+save(pop,file="C:/dev/lab_r/data/pro/popFIN.RData")
+head(pop)
+```
+#### 1.1.3 naver 검색어지수     
+깨달은점  : 데이터 자체가 절대값에 대한 비율로 계산이 됨. 예를 들어 용산구의 
+            데이터를 가장 많이 입력한 것을 100으로 치자면, 다른 것들은  
+            0~1사이로 표기가 되기 때문에 정규분포를 띄게끔 설계하는 것 자체에  
+            문제가 있는 수치로 계산이 됨. ㅠㅠ 
+            [네이버 트렌드지수 예시](https://datalab.naver.com/keyword/trendResult.naver?hashKey=N_b6775c7008ac17bdb0c4190059c7f347)
+```{r naver, include=FALSE}
+# 데이터 출처 : 네이버   
+# 데이터 기간 : 2016.09~2019.09 (2014~2015년도 데이터를 구할수가 없음 ) 
+# 데이터 항목 : 날짜, 시군구코드, 검색어 지수 
+naver.fin <-read.csv("pro/naver3.csv",fileEncoding = "UTF-8", sep =",",stringsAsFactors = FALSE)
+
+head(naver.fin)
+```
+#### 1.1.4 수요 공급 데이터      
+깨달은점  : 이 데이터는 또 연도별 데이터임. 나중에 어떻게 join 시킬지가 점점   
+            두려워지기 시작하는 느낌이었음. 
+```{r demand, include=FALSE}
+# 데이터 출처 : 부동산지인 
+# 데이터 기간 : 2016.09~2019.09 (연도별 데이터임 ) 
+# 데이터 항목 : 연도, 구, 분류 (수요 or 공급), 물량 
+
+load("pro/demand2.RData")
+head(demand2)
+```            
+            
+### 1.2 결측치 처리 
+깨달은 점 : 세상에 결측치가 이렇게 많을 수도 있다는 것을 경험함. 
+            colSums(is.na(df$col))은 나에게 가장 많이 기억될 코드가 될듯.
+```{r missingvalue, echo=FALSE}
+# 원데이터 거래 년도, 평형별 판가 분류 보기
+# 결측치 처리하기 
+## step1. 시군구 코드의 경우 동으로 확인했을 때, 모두 강동구로 확인되었음으로 일괄 강동구 변경
+
+load(file = "pro/FINALDATA2.RData")
+colSums(is.na(FINALDATA2))
+table(FINALDATA2$시군구코드)
+table(FINALDATA2$날짜)
+
+## step2. 결측치가 들어있는 데이터 사본을 만들어서 결측치 확인 
+##FINAL_NA <-filter(FINALDATA2,is.na(시군구코드))
+##FINAL_NA[is.na(FINAL_NA$시군구코드),1]<-"강동구"
+##FINAL_NA[is.na(FINAL_NA$시군구코드),1]<-"강동구"
+##FINALDATA2[is.na(FINALDATA2$시군구코드),1]<-"강동구"
+##colSums(is.na(FINALDATA2))
+
+
+## step3. 전용면직에 결측치가 들어있는 데이터 사본 만들어서 결측치 확인 
+##FINAL_NA1 <-filter(FINALDATA2,is.na(전용면적))
+##table(FINAL_NA1$시군구코드)
+# 결측치가 특정구에 몰려 있음으로 가격을 변수로 하여 평수 지정
+
+library(stringr)
+
+FINALDATA2$거래금액 <-gsub(",","",FINALDATA2$거래금액)
+FINALDATA2$거래금액 <- str_trim(FINALDATA2$거래금액,side=c("both"))
+FINALDATA2$거래금액 <-as.numeric(FINALDATA2$거래금액)
+FINALDATA2$전용면적 <-as.numeric(FINALDATA2$전용면적)
+FINALDATA2$시군구코드 <-factor(FINALDATA2$시군구코드)
+FINALDATA2$시군구 <-factor(FINALDATA2$시군구)
+FINALDATA2$건축년도 <-as.numeric(FINALDATA2$건축년도)
+FINALDATA2$날짜 <-factor(FINALDATA2$날짜)
+
+FINALDATA2$분류 <- ifelse(FINALDATA2$전용면적 >135.0,FINALDATA2$분류<-"대형",
+                        ifelse(FINALDATA2$전용면적>=95.0,FINALDATA2$분류<-"중대형",
+                               ifelse(FINALDATA2$전용면적>=62.8,FINALDATA2$분류<-"중소형",FINALDATA2$분류<-"소형")))
+table(FINALDATA2$분류)
+str(FINALDATA2)
+
+
+FINALDATA2$분류 <-factor(FINALDATA2$분류)
+
+head(FINALDATA2)
+
+# 평수별 중앙값을 기준으로 결측치 값을 채우기
+with(FINALDATA2,tapply(거래금액,분류,summary))
+colSums(is.na(FINALDATA2))
+FINALDATA2[is.na(FINALDATA2$분류),]
+
+table(FINALDATA2$분류)
+FINAL_NA3 <-FINALDATA2[is.na(FINALDATA2$분류),]
+FINAL_NA3
+FINALDATA2$분류<-ifelse(is.na(FINALDATA2$분류)|FINALDATA2$거래금액 >=100000,FINALDATA2$분류<-"대형",
+                      ifelse(is.na(FINALDATA2$분류)|FINALDATA2$거래금액>=69500,FINALDATA2$분류<-"중대형",
+                             ifelse(is.na(FINALDATA2$분류)|FINALDATA2$거래금액>=50500,FINALDATA2$분류<-"중소형",FINALDATA2$분류<-"소형")))
+
+table(FINALDATA2$분류)
+colSums(is.na(FINALDATA2))
+str(FINALDATA2)
+
+
+```
+## 2. 구한 것을 살펴보기 
+### 2.1 구별 아파트 수요 공급량 그래프
+```{r demandgraph, echo=FALSE,figh.height=2,fig.width=5.5}
+library(knitr)
+library(ggplot2)
+
+demand<-read.csv("pro/demand2.csv",fileEncoding = "UTF-8", sep =",")
+demand_ds <-read.csv("pro/demand2.csv",fileEncoding = "UTF-8", sep =",")
+demand_ds$연도 <-factor(demand_ds$연도)
+
+
+demand_ds[500,4]<-2039
+
+ggplot(data=demand_ds,aes(x=연도,y=입주량,color=분류, group=분류))+
+      geom_line()+
+      geom_point()+
+      facet_wrap(~구)+
+      theme_bw() +
+      theme(panel.grid.major.x = element_blank(), 
+        panel.grid.minor.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank())+
+      labs(title = '구별 아파트 수요공급량',
+           x='연도',
+           y='양')+
+      theme(text=element_text(size=5,family="Arial"))
+
+```            
+
+### 2.2 구별 연도별 누적 아파트 수요공급량
+```{r demandgraph2, echo=FALSE,figh.height=2,fig.width=5.5}
+demand3 <-read.csv("pro/demand3.csv",fileEncoding = "UTF-8", sep =",")
+demand3$연도 <-factor(demand3$연도)
+
+demand3[242:250,2] <- "강동구"
+
+
+ggplot(data=demand3, aes(x=연도,y=누적,color =구, group = 구))+
+      geom_col()+
+      facet_wrap(~구)+
+      labs(title = '구별 연도별 누적 아파트 수요공급량',
+       x='연도',
+       y='물량')+
+       theme(legend.position = 'none',text=element_text(size=10,family="Arial"))+
+       theme(axis.text.x = element_text(colour="grey20", size=6, angle=90, hjust=.5, vjust=.5))
+```
+
+            
+### 2.3 구별 연도별 아파트 초과 공급량 
+```{r demandgraph3, echo=FALSE,figh.height=2,fig.width=5.5}
+ggplot(data=demand3, aes(x=연도,y=차이,color =구, group = 구))+
+  geom_col()+
+  facet_wrap(~구)+
+  labs(title = '구별 연도별 아파트 초과공급량',
+       x='연도',
+       y='물량')+
+  theme(legend.position = 'none',text=element_text(size=10,family="Arial"))+
+  theme(axis.text.x = element_text(colour="grey20", size=6, angle=90, hjust=.5, vjust=.5))
+```
+
+### 2.4 구별 월별 분류별 거래금액 분포  
+
+```{r demandgraph4, echo=FALSE, fig.width=5.5, figh.height=2}
+load("my_work.RData")
+
+
+ggplot(FINALDATA3, aes(x=날짜, y=거래금액,color=분류)) +
+  geom_point(size =0.5,alpha = 0.1)+
+  coord_cartesian(ylim = c(0:300000))+
+  scale_y_continuous(labels = scales::comma)+
+  facet_wrap(~시군구코드)+
+  labs(title = '구별 월별 분류별 거래금액 분포',
+       x='월',
+       y='거래금액')+
+  theme(axis.text.x = element_text(colour="grey20", size=6, angle=90, hjust=.5, vjust=.5))
+```
+
+## 3. 구한 것을 합치기  
+H0 : 집값의 정확한 값보다는 구별, 평형별 상대적 상승, 하락율을 구하는데 초점을 맞춘다.  
+H1 : 일별/월별/연도별 데이터가 있지만 평균적 움직임을 보기 위해서, 월별 데이터로 Merging한다.  
+```{r merge2, echo=FALSE}
+
+
+DASI <-dplyr::select(FINALDATA4,시군구코드,도로명,도로명건물본번호코드,아파트,년,월,일,날짜,거래금액,분류,건축년도)
+
+DASI$년<-as.numeric(DATAFIN$년)
+DASI$건물연수<-(DATAFIN$년-DATAFIN$건축년도)
+DASI$날짜<-as.factor(DATAFIN$날짜)
+
+DASI1<-merge(x=DASI,y=pop,by =c("날짜","시군구코드"),all.x = TRUE)
+
+
+naver.fin$날짜 <-as.factor(naver.fin$날짜)
+naverfin<-naver.fin
+
+DASI2<-merge(x=DASI1,y=naverfin,by =c("날짜","시군구코드"),all.x = TRUE)
+str(demand3)
+str(DASI2)
+demand3$연도 <-as.numeric(demand3$연도)
+demand3$구 <-as.factor(demand3$구)
+
+
+demandfinal<-read.csv("pro/demand3.csv",fileEncoding = "UTF-8", sep =",")
+head(demandfinal)
+demandfinal <-dplyr::rename(demandfinal,년=연도)
+demandfinal <-dplyr::rename(demandfinal,시군구코드=구)
+demandfinal$년 <-as.numeric(demandfinal$년)
+demandfinal$시군구코드 <-as.factor(demandfinal$시군구코드)
+str(demandfinal)
+
+DASI3<-merge(x=DASI2,y=demandfinal,by =c("년","시군구코드"),all.x = TRUE)
+
+pir <-read.csv("pro/PIR.csv",fileEncoding = "UTF-8", sep =",",stringsAsFactors = FALSE)
+pir$날짜<-factor(pir$날짜)
+DASI4 <-merge(x=DASI3,y=pir,by =c("날짜"),all.x =TRUE)
+str(pir)
+str(DASI4)
+DASI4 <-subset(DASI4,select=-월.x)
+DASI4 <-subset(DASI4,select=-월.y)
+
+jeaosaeratio <-read.csv("pro/jeansaeratio.csv",fileEncoding = "UTF-8", sep =",",stringsAsFactors = FALSE)
+str(jeaosaeratio)
+
+library(reshape)
+jeaosaeratio_sample <-melt(jeaosaeratio,
+                             id.vars=c("연","월","날짜"),
+                             measure.vars=c("종로구","중구","용산구","성동구","광진구","동대문구","중랑구","성북구","강북구","도봉구", "노원구","은평구","서대문구","마포구","양천구","강서구","구로구","금천구","영등포구","동작구","관악구","서초구","강남구","송파구","강동구"))
+
+jeaosaeratio_sample<-as.data.frame(jeaosaeratio_sample)
+names(jeaosaeratio_sample)<-c("연도인가","월인가","날짜","시군구코드","jeonratio")
+
+
+jeaosaeratio_sample$날짜<-factor(jeaosaeratio_sample$날짜)
+DASI5 <-merge(x=DASI4,y=jeaosaeratio_sample,by=c("날짜","시군구코드"),all.x =TRUE)
+str(DASI5)
+
+
+TEST<-dplyr::select(DASI5,날짜,시군구코드,거래금액,분류,건물연수,구별이동,구인구,비율,
+                    검색지수,입주량,수요량,누적,차이,PIR,jeonratio)
+
+TEST$거래금액 <-as.numeric(as.character(TEST$거래금액))
+hist(TEST$거래금액)
+TEST$거래금액 <-as.numeric(as.character(TEST$거래금액))
+str(TEST)
+
+TEST2 <-na.omit(TEST)
+```
+## 4. Modeling   
+### 4.1 lm 선형회귀 모델 
+```{r model_lm, echo=FALSE}
+ins_model <-lm(거래금액~.,data=TEST2)
+ins_model
+summary(ins_model)
+str(TEST2)
+
+TEST2$분류 <- as.numeric(as.factor(TEST2$분류))
+TEST2$시군구코드 <- as.numeric(as.factor(TEST2$시군구코드))
+TEST2$날짜 <- as.numeric(as.factor(TEST2$날짜))
+
+
+```
+
+### 4.2 SVM 서포트벡터 머신  
+```{r model_SVM, eval=FALSE, include=FALSE}
+normalize <-function(x){return((x-min(x))/(max(x)-min(x)))}
+TEST_norm<-as.data.frame(lapply(TEST2, normalize))
+summary(TEST_norm)
+
+set.seed(1234)
+
+idx <-c(rep("train",round(nrow(TEST_norm)*0.7)),
+        rep("test",round(nrow(TEST_norm)*0.3)))
+
+train <-TEST_norm[idx =="train", ]
+test <-TEST_norm[idx == "test", ]
+
+library(kernlab)
+
+Test_classifier <-ksvm(거래금액~.,data=train,kernel = "vanilladot")
+Test_classifier
+Test_prediction <-predict(Test_classifier,train)
+head(Test_prediction)
+
+```
+### 4.3 RF randomForest
+```{r model_RF, eval=FALSE, include=FALSE}
+library(randomForest)
+set.seed(300)
+
+str(TEST2)
+rf <-randomForest(거래금액~.,data=TEST2)
+
+rf
+
+plot(rf)
+varImpPlot(rf)
+
+```
+
+
+

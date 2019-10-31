@@ -5,28 +5,32 @@ library(ggplot2)
 
 rm(list =ls())
 
-service_key <- "NPzUo7mqkq13NjGIx4k7rRIAAsmawhKYwVHb11qcoYGyhavfY%2BN699pqv8KXMqmHGpCvKIuOi%2BDKHYHzMUou0w%3D%3D "
+service_key <-"RR4OiP5FElPvLBxp7%2FgTitOIlfK09e7y7xRz5k%2B%2BabGSGFAZHNtgOqmTJ7AXr65wSivFDeQVVIK9sfupQS2zVA%3D%3D"
+
 
 #지역코드 
 locCode <-c("11110","11140","11170","11200","11215","11230","11260","11290","11305","11320","11350",
-            "11380","11410","11440","11470","11500","11530","11545","11560","11590","11620","11650","11680",
-            "11710","11740")
+            "11380","11410","11440","11470","11500","11530","11545","11560","11590","11620","11650","11680","11710","11740")
 
 locCode_nm <-c("종로구","중구","용산구","성동구","광진구","동대문구","중랑구","성북구","강북구","도봉구",
-               "노원구","은평구","서대문구","마포구","양천구","강서구","구로구","금천구","영등포구","동작구",
-               "관악구","서초구","강남구","송파구","강동구")
+               "노원구","은평구","서대문구","마포구","양천구","강서구","구로구","금천구","영등포구","동작구","관악구","서초구","강남구","송파구","강동구")
 
-datalist <-c("201710","201711","201712","201801","201802","201803","201804","201805","201806","201807","201808","201809")
+datalist <-c("201510","201511","201512","201601","201602","201603","201604","201605","201606","201607","201608","201609")
 
+str(locCode)
+
+locCode <-c("11110")
+locCode <-as.numeric(locCode)
+locCode_nm<-c("종로구")
+datalist <-c("201509","201609","201709","201809","201909")
 
 loc <-cbind(locCode,locCode_nm)
 loc
+Num_of_Rows <- 100
 
-Num_of_Rows <-100
-urllist <-list()
+# 지역코드 x 날짜 별로 자료를 요청하는 url 생성
+urllist <- list()
 cnt <-0
-
-
 
 for(i in 1:length(locCode)){
   for(j in 1:length(datalist)){
@@ -38,8 +42,11 @@ for(i in 1:length(locCode)){
   }
 }
 
-raw.data <- list()
+# 5 개 지역 x 12 개월 = 총 60 개의 url 요청
+# (Open API 서비스에 따라 접속 횟수를 제한하기도 하므로 따로 저장)
+# (아파트매매 실거래 상세 자료의 경우 하루 1000건)
 
+raw.data <- list()
 rootNode <- list()
 
 for(i in 1:length(urllist)){
@@ -47,9 +54,10 @@ for(i in 1:length(urllist)){
   rootNode[[i]] <- xmlRoot(raw.data[[i]])
 }
 
-total<-list()
 
-xmlApply()
+# 저장한 XML을 분석가능한 형태로 수정
+
+total<-list()
 
 for(i in 1:length(urllist)){
   
@@ -61,7 +69,7 @@ for(i in 1:length(urllist)){
   size <- xmlSize(items) # 몇개의 item 이 있는지 확인한다
   
   for(j in 1:size){
-    item_temp <- xmlApply(items[[j]],xmlValue)
+    item_temp <- xmlSApply(items[[j]],xmlValue)
     item_temp_dt <- data.table( GU      = locCode_nm[i%/%12+1],
                                 GU_CODE = locCode[i%/%12+1],
                                 DATE = datalist[(i-1)%%12+1],
@@ -95,17 +103,18 @@ for(i in 1:length(urllist)){
   total[[i]] <- rbindlist(item)
 }
 
+APT_SALES_ROSS <- rbindlist(total)
 
-RESULTS_APT_SALES18_FIN <- rbindlist(total)
-load
 
-names(RESULTS_APT_SALES18_FIN) <- c("시군구코드","시군구","날짜","거래금액","건축년도","년","도로명","도로명건물본번호코드","도로명건물부번호코드",
+names(APT_SALES_ROSS) <- c("시군구코드","시군구","날짜","거래금액","건축년도","년","도로명","도로명건물본번호코드","도로명건물부번호코드",
                               "도로명시군구코드","도로명일련번호코드","도로명지상지하코드","도로명코드","법정동",
                               "법정동본번코드","법정동부번코드","법정동시군구코드","법정도읍면동코드","법정동지번코드",
                               "아파트","월","일","일련번호","전용면적","지번","지역코드","층")
-head(RESULTS_APT_SALES18_FIN)
-table(is.na(RESULTS_APT_SALES17_FIN))
-str(RESULTS_APT_SALES15_FIN)
-table(is.na(RESULTS_APT_SALES17_FIN$시군구코드))
+head(APT_SALES_ROSS)
 
-save(RESULTS_APT_SALES17_FIN,file="C:/dev/lab_r/data/pro/RESULTS_APT_SALES17_FIN.RData")
+table(is.na(APT_SALES_16))
+table(is.na(APT_SALES_16$시군구코드))
+table(APT_SALES_16$시군구코드)
+
+
+save(APT_SALES_ROSS,file="C:/dev/lab_r/data/pro/APT_SALES_ROSS.RData")
